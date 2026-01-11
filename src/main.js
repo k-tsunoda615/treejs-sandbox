@@ -27,6 +27,16 @@ if (!navigator.gpu) {
   );
   camera.position.set(0, 1.2, 7);
 
+  const mouse = new THREE.Vector2(0, 0);
+  const raycaster = new THREE.Raycaster();
+  const cursorPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+  const cursorPoint = new THREE.Vector3();
+
+  window.addEventListener("pointermove", (event) => {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  });
+
   const ambient = new THREE.AmbientLight(0x3a4b7a, 0.95);
   const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
   keyLight.position.set(4, 6, 2);
@@ -42,7 +52,7 @@ if (!navigator.gpu) {
   const satelliteGeometry = new THREE.SphereGeometry(0.12, 16, 16);
 
   const clusters = [];
-  const clusterCount = 500;
+  const clusterCount = 300;
 
   function createCluster() {
     const group = new THREE.Group();
@@ -187,6 +197,8 @@ if (!navigator.gpu) {
 
   function animate() {
     const elapsed = clock.getElapsedTime();
+    raycaster.setFromCamera(mouse, camera);
+    raycaster.ray.intersectPlane(cursorPlane, cursorPoint);
     clusters.forEach((cluster) => {
       const { group, knot, ring, shell, satellites, materials } = cluster;
       const phaseOffset = cluster.offsets.color * Math.PI * 2;
@@ -223,6 +235,18 @@ if (!navigator.gpu) {
         cluster.basePosition.y + driftY,
         cluster.basePosition.z
       );
+
+      const avoidRadius = 2.5;
+      const toCursor = group.position.clone().sub(cursorPoint);
+      const distance = toCursor.length();
+      if (distance < avoidRadius) {
+        const strength = THREE.MathUtils.smoothstep(
+          avoidRadius - distance,
+          0,
+          avoidRadius
+        );
+        group.position.add(toCursor.normalize().multiplyScalar(strength * 2));
+      }
 
       group.rotation.y = elapsed * 0.25 + cluster.offsets.rotation;
       knot.rotation.x = elapsed * 0.5 + cluster.offsets.rotation;
