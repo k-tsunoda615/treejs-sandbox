@@ -211,7 +211,7 @@ function initScene() {
 
   const gpuPanel = document.createElement("div");
   gpuPanel.className = "control-panel";
-  gpuPanel.innerHTML = `<div class="control-panel__title">webgpu</div>`;
+  gpuPanel.innerHTML = `<div class="control-panel__title">renderer</div>`;
   panelStack.appendChild(gpuPanel);
 
   const ui = document.createElement("div");
@@ -444,7 +444,9 @@ function initScene() {
       }
       if (key === "useWebGPU") {
         controlMap.useWebGPU.input.checked = settings.useWebGPU;
-        controlMap.useWebGPU.value.textContent = settings.useWebGPU ? "on" : "off";
+        controlMap.useWebGPU.value.textContent = settings.useWebGPU
+          ? "webgpu"
+          : "webgl";
         return;
       }
       syncValue(key);
@@ -466,21 +468,25 @@ function initScene() {
 
   const gpuError = document.createElement("div");
   gpuError.className = "control-panel__error";
-  gpuError.textContent = "この環境ではWebGPUを使えません。";
+  gpuError.textContent =
+    "この環境ではWebGPUを使えません。チェックを外してWebGLに切り替えてください。";
   gpuError.hidden = true;
   gpuPanel.appendChild(gpuError);
 
   const rendererToggle = addToggle({
     key: "useWebGPU",
-    label: "enable",
+    label: "",
     container: gpuPanel,
   });
+  if (controlMap.useWebGPU) {
+    controlMap.useWebGPU.value.textContent = settings.useWebGPU ? "webgpu" : "webgl";
+  }
   gpuError.hidden = !(settings.useWebGPU && !gpuAvailable);
   rendererToggle.addEventListener("change", async (event) => {
     settings.useWebGPU = event.target.checked;
     const control = controlMap.useWebGPU;
     if (control) {
-      control.value.textContent = settings.useWebGPU ? "on" : "off";
+      control.value.textContent = settings.useWebGPU ? "webgpu" : "webgl";
     }
     gpuError.hidden = !(settings.useWebGPU && !gpuAvailable);
     await setRenderer(settings.useWebGPU);
