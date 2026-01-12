@@ -142,3 +142,32 @@ canvas {
   letter-spacing: 0.02em;
   text-transform: none;
 }
+
+.control-panel__collapse {
+  display: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(130, 170, 255, 0.35);
+  background: rgba(20, 28, 46, 0.85);
+  color: #e8f4ff;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.control-panel__collapse:hover {
+  border-color: rgba(130, 170, 255, 0.65);
+}
+
+@media (max-width: 640px) {
+  .control-panel__collapse {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .control-panel-stack.is-collapsed .control-panel {
+    display: none;
+  }
+}

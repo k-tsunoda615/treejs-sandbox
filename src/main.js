@@ -200,6 +200,15 @@ function initScene() {
   panelStack.className = "control-panel-stack";
   document.body.appendChild(panelStack);
 
+  const panelToggle = document.createElement("button");
+  panelToggle.type = "button";
+  panelToggle.className = "control-panel__collapse";
+  panelToggle.textContent = "settings";
+  panelToggle.addEventListener("click", () => {
+    panelStack.classList.toggle("is-collapsed");
+  });
+  panelStack.appendChild(panelToggle);
+
   const gpuPanel = document.createElement("div");
   gpuPanel.className = "control-panel";
   gpuPanel.innerHTML = `<div class="control-panel__title">webgpu</div>`;
