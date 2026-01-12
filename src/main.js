@@ -317,13 +317,16 @@ function initScene() {
   }
 
   function rebuildClusters(count) {
-    clusters.forEach((cluster) => {
-      scene.remove(cluster.group);
-    });
+    clusters.forEach(disposeCluster);
     clusters.length = 0;
     for (let i = 0; i < count; i += 1) {
       clusters.push(createCluster());
     }
+  }
+
+  function disposeCluster(cluster) {
+    scene.remove(cluster.group);
+    Object.values(cluster.materials).forEach((material) => material.dispose());
   }
 
   addSlider({
