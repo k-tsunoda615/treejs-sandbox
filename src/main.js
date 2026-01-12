@@ -193,7 +193,6 @@ function initScene() {
 
   const settings = { ...SETTINGS_DEFAULTS };
   const gpuAvailable = Boolean(navigator.gpu);
-  settings.useWebGPU = gpuAvailable && settings.useWebGPU;
   const clusters = [];
   let activePalette = PALETTE_SETS[settings.palette];
 
@@ -458,7 +457,7 @@ function initScene() {
 
   const gpuError = document.createElement("div");
   gpuError.className = "control-panel__error";
-  gpuError.textContent = "この環境ではWebGPUを使えません。WebGLに切り替えました。";
+  gpuError.textContent = "この環境ではWebGPUを使えません。";
   gpuError.hidden = true;
   gpuPanel.appendChild(gpuError);
 
@@ -467,20 +466,14 @@ function initScene() {
     label: "enable",
     container: gpuPanel,
   });
-  rendererToggle.disabled = !gpuAvailable;
+  gpuError.hidden = !(settings.useWebGPU && !gpuAvailable);
   rendererToggle.addEventListener("change", async (event) => {
-    if (event.target.checked && !gpuAvailable) {
-      event.target.checked = false;
-      settings.useWebGPU = false;
-      gpuError.hidden = false;
-      return;
-    }
     settings.useWebGPU = event.target.checked;
     const control = controlMap.useWebGPU;
     if (control) {
       control.value.textContent = settings.useWebGPU ? "on" : "off";
     }
-    gpuError.hidden = true;
+    gpuError.hidden = !(settings.useWebGPU && !gpuAvailable);
     await setRenderer(settings.useWebGPU);
   });
 
@@ -626,7 +619,14 @@ function initScene() {
     }
     rendererReady = false;
 
-    if (useWebGPU && gpuAvailable) {
+    if (useWebGPU && !gpuAvailable) {
+      app.textContent = "この環境ではWebGPUを使えません。";
+      return;
+    }
+
+    app.textContent = "";
+
+    if (useWebGPU) {
       renderer = new WebGPURenderer({ antialias: true });
     } else {
       renderer = new THREE.WebGLRenderer({ antialias: true });
