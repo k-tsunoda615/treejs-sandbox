@@ -101,3 +101,26 @@ canvas {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+.control-panel__toggle {
+  width: 18px;
+  height: 18px;
+  accent-color: #41d1ff;
+  justify-self: end;
+}
+
+.control-panel__button {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(130, 170, 255, 0.35);
+  background: rgba(20, 28, 46, 0.85);
+  color: #e8f4ff;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.control-panel__button:hover {
+  border-color: rgba(130, 170, 255, 0.65);
+}

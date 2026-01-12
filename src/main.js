@@ -4,9 +4,145 @@ import { WebGPURenderer } from "three/webgpu";
 
 const app = document.querySelector("#app");
 
+const PALETTE_SETS = {
+  psychedelic: {
+    knot: [
+      new THREE.Color("#7fe3ff"),
+      new THREE.Color("#5bffc9"),
+      new THREE.Color("#ff8fe0"),
+    ],
+    ring: [
+      new THREE.Color("#fff0a6"),
+      new THREE.Color("#9be8ff"),
+      new THREE.Color("#d98bff"),
+    ],
+    shell: [
+      new THREE.Color("#d98bff"),
+      new THREE.Color("#5bffc9"),
+      new THREE.Color("#7fe3ff"),
+    ],
+    satellites: [
+      new THREE.Color("#7fe3ff"),
+      new THREE.Color("#b0f1ff"),
+      new THREE.Color("#ff8fe0"),
+    ],
+  },
+  pastel: {
+    knot: [
+      new THREE.Color("#ffd6e8"),
+      new THREE.Color("#c8f2ff"),
+      new THREE.Color("#d9d3ff"),
+    ],
+    ring: [
+      new THREE.Color("#fff1c9"),
+      new THREE.Color("#d5f3e2"),
+      new THREE.Color("#ffe0f0"),
+    ],
+    shell: [
+      new THREE.Color("#e6d9ff"),
+      new THREE.Color("#cfe9ff"),
+      new THREE.Color("#ffdce6"),
+    ],
+    satellites: [
+      new THREE.Color("#d4f0ff"),
+      new THREE.Color("#e6dcff"),
+      new THREE.Color("#ffe7cf"),
+    ],
+  },
+  primary: {
+    knot: [
+      new THREE.Color("#ff3b30"),
+      new THREE.Color("#34c759"),
+      new THREE.Color("#007aff"),
+    ],
+    ring: [
+      new THREE.Color("#ff9f0a"),
+      new THREE.Color("#ffd60a"),
+      new THREE.Color("#af52de"),
+    ],
+    shell: [
+      new THREE.Color("#0a84ff"),
+      new THREE.Color("#30d158"),
+      new THREE.Color("#ff375f"),
+    ],
+    satellites: [
+      new THREE.Color("#ff453a"),
+      new THREE.Color("#64d2ff"),
+      new THREE.Color("#ffd60a"),
+    ],
+  },
+  neon: {
+    knot: [
+      new THREE.Color("#00f7ff"),
+      new THREE.Color("#39ff14"),
+      new THREE.Color("#ff4dff"),
+    ],
+    ring: [
+      new THREE.Color("#ffea00"),
+      new THREE.Color("#00e5ff"),
+      new THREE.Color("#ff0080"),
+    ],
+    shell: [
+      new THREE.Color("#8c52ff"),
+      new THREE.Color("#00ffcc"),
+      new THREE.Color("#ff4dff"),
+    ],
+    satellites: [
+      new THREE.Color("#00f7ff"),
+      new THREE.Color("#39ff14"),
+      new THREE.Color("#ffea00"),
+    ],
+  },
+  mono: {
+    knot: [
+      new THREE.Color("#f5f7ff"),
+      new THREE.Color("#c7d2ff"),
+      new THREE.Color("#8f9bff"),
+    ],
+    ring: [
+      new THREE.Color("#e9edf8"),
+      new THREE.Color("#b7c0e6"),
+      new THREE.Color("#6d75b8"),
+    ],
+    shell: [
+      new THREE.Color("#dfe3f5"),
+      new THREE.Color("#9ea6c9"),
+      new THREE.Color("#6b7396"),
+    ],
+    satellites: [
+      new THREE.Color("#eef1fb"),
+      new THREE.Color("#c0c8e9"),
+      new THREE.Color("#8892c2"),
+    ],
+  },
+};
+
+const SETTINGS_DEFAULTS = {
+  clusterCount: 100,
+  colorSpeed: 0.5,
+  scaleMin: 1.2,
+  scaleMax: 1.4,
+  scaleSpeed: 0.3,
+  rotationSpeed: 2,
+  avoidEnabled: true,
+  palette: "primary",
+};
+
+const INTERACTION = {
+  avoidRadius: 2.5,
+  avoidStrength: 2,
+  blastRadius: 2.2,
+  blastStrength: 1.6,
+  blastDamping: 0.92,
+};
+
 if (!navigator.gpu) {
   app.innerHTML = "WebGPU is not supported in this browser.";
 } else {
+  initScene();
+}
+
+function initScene() {
   const scene = new THREE.Scene();
   const vibe = {
     night: new THREE.Color("#0b0f1a"),
@@ -32,6 +168,11 @@ if (!navigator.gpu) {
   const cursorPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
   const cursorPoint = new THREE.Vector3();
 
+  function updateCursorPoint() {
+    raycaster.setFromCamera(mouse, camera);
+    raycaster.ray.intersectPlane(cursorPlane, cursorPoint);
+  }
+
   window.addEventListener("pointermove", (event) => {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -46,29 +187,16 @@ if (!navigator.gpu) {
   accentLight.position.set(5, -2, 4);
   scene.add(ambient, keyLight, rimLight, accentLight);
 
-  const knotGeometry = new THREE.TorusKnotGeometry(1.2, 0.35, 220, 32);
-  const ringGeometry = new THREE.TorusGeometry(2.2, 0.06, 16, 120);
-  const shellGeometry = new THREE.IcosahedronGeometry(2.4, 1);
-  const satelliteGeometry = new THREE.SphereGeometry(0.12, 16, 16);
+  const geometries = {
+    knot: new THREE.TorusKnotGeometry(1.2, 0.35, 220, 32),
+    ring: new THREE.TorusGeometry(2.2, 0.06, 16, 120),
+    shell: new THREE.IcosahedronGeometry(2.4, 1),
+    satellite: new THREE.SphereGeometry(0.12, 16, 16),
+  };
 
+  const settings = { ...SETTINGS_DEFAULTS };
   const clusters = [];
-  const settings = {
-    clusterCount: 100,
-    colorSpeed: 0.5,
-    scaleMin: 0.1,
-    scaleMax: 0.5,
-    scaleSpeed: 0.5,
-    rotationSpeed: 1,
-    palette: "psychedelic",
-  };
-
-  const interaction = {
-    avoidRadius: 2.5,
-    avoidStrength: 2,
-    blastRadius: 2.2,
-    blastStrength: 1.6,
-    blastDamping: 0.92,
-  };
+  let activePalette = PALETTE_SETS[settings.palette];
 
   const ui = document.createElement("div");
   ui.className = "control-panel";
@@ -142,11 +270,50 @@ if (!navigator.gpu) {
     return select;
   }
 
+  function addToggle({ key, label }) {
+    const row = document.createElement("div");
+    row.className = "control-panel__row";
+    row.innerHTML = `
+      <div class="control-panel__label">
+        <span>${label}</span>
+        <span class="control-panel__value">${settings[key] ? "on" : "off"}</span>
+      </div>
+    `;
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.className = "control-panel__toggle";
+    input.checked = Boolean(settings[key]);
+    row.appendChild(input);
+    ui.appendChild(row);
+    controlMap[key] = {
+      input,
+      value: row.querySelector(".control-panel__value"),
+    };
+    return input;
+  }
+
+  function addButton(label) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "control-panel__button";
+    button.textContent = label;
+    ui.appendChild(button);
+    return button;
+  }
+
+  function randomInRange(min, max, step) {
+    if (step >= 1) {
+      return Math.floor(THREE.MathUtils.randFloat(min, max + 1));
+    }
+    const steps = Math.round((max - min) / step);
+    return min + Math.round(Math.random() * steps) * step;
+  }
+
   function syncValue(key) {
     const control = controlMap[key];
     if (!control) return;
     control.input.value = String(settings[key]);
-    control.value.textContent = formatValue(settings[key], control.step);
+    control.value.textContent = formatValue(settings[key], control.step || 1);
   }
 
   function rebuildClusters(count) {
@@ -229,69 +396,105 @@ if (!navigator.gpu) {
     syncValue("rotationSpeed");
   });
 
+  const shuffleButton = addButton("shuffle settings");
+  ui.insertBefore(shuffleButton, ui.children[1]);
+
+  shuffleButton.addEventListener("click", () => {
+    settings.clusterCount = randomInRange(1, 500, 1);
+    settings.colorSpeed = randomInRange(0.05, 1, 0.05);
+    settings.scaleMin = randomInRange(0.1, 1.1, 0.05);
+    settings.scaleMax = randomInRange(settings.scaleMin, 2, 0.05);
+    settings.scaleSpeed = randomInRange(0.05, 1, 0.05);
+    settings.rotationSpeed = randomInRange(0, 2, 0.05);
+    settings.avoidEnabled = Math.random() > 0.4;
+
+    const paletteKeys = Object.keys(PALETTE_SETS);
+    settings.palette = paletteKeys[Math.floor(Math.random() * paletteKeys.length)];
+    activePalette = PALETTE_SETS[settings.palette] || PALETTE_SETS.psychedelic;
+
+    Object.keys(controlMap).forEach((key) => {
+      if (key === "palette") {
+        controlMap.palette.input.value = settings.palette;
+        controlMap.palette.value.textContent = settings.palette;
+        return;
+      }
+      if (key === "avoidEnabled") {
+        controlMap.avoidEnabled.input.checked = settings.avoidEnabled;
+        controlMap.avoidEnabled.value.textContent = settings.avoidEnabled ? "on" : "off";
+        return;
+      }
+      syncValue(key);
+    });
+
+    rebuildClusters(settings.clusterCount);
+  });
+
+  addToggle({ key: "avoidEnabled", label: "avoid cursor" }).addEventListener(
+    "change",
+    (event) => {
+      settings.avoidEnabled = event.target.checked;
+      const control = controlMap.avoidEnabled;
+      if (control) {
+        control.value.textContent = settings.avoidEnabled ? "on" : "off";
+      }
+    }
+  );
+
   addSelect({
     key: "palette",
     label: "palette",
     options: [
+      { value: "primary", label: "primary" },
       { value: "psychedelic", label: "psychedelic" },
       { value: "pastel", label: "pastel" },
-      { value: "primary", label: "primary" },
       { value: "neon", label: "neon" },
       { value: "mono", label: "mono" },
     ],
   }).addEventListener("change", (event) => {
     settings.palette = event.target.value;
+    activePalette = PALETTE_SETS[settings.palette] || PALETTE_SETS.psychedelic;
     const control = controlMap.palette;
     if (control) {
       control.value.textContent = settings.palette;
     }
   });
 
-  function createCluster() {
-    const group = new THREE.Group();
-    scene.add(group);
+  function createMaterials() {
+    return {
+      knot: new THREE.MeshStandardMaterial({
+        color: vibe.cyan.clone(),
+        metalness: 0.5,
+        roughness: 0.18,
+        emissive: vibe.purple.clone(),
+        emissiveIntensity: 0.18,
+      }),
+      ring: new THREE.MeshStandardMaterial({
+        color: vibe.gold.clone(),
+        metalness: 0.15,
+        roughness: 0.2,
+        emissive: vibe.amber.clone(),
+        emissiveIntensity: 0.28,
+      }),
+      shell: new THREE.MeshBasicMaterial({
+        color: vibe.purple.clone(),
+        wireframe: true,
+        transparent: true,
+        opacity: 0.22,
+      }),
+      satellites: new THREE.MeshStandardMaterial({
+        color: vibe.cyan.clone(),
+        metalness: 0.2,
+        roughness: 0.2,
+        emissive: vibe.purple.clone(),
+        emissiveIntensity: 0.22,
+      }),
+    };
+  }
 
-    const knotMaterial = new THREE.MeshStandardMaterial({
-      color: vibe.cyan.clone(),
-      metalness: 0.5,
-      roughness: 0.18,
-      emissive: vibe.purple.clone(),
-      emissiveIntensity: 0.18,
-    });
-    const knot = new THREE.Mesh(knotGeometry, knotMaterial);
-    group.add(knot);
-
-    const ringMaterial = new THREE.MeshStandardMaterial({
-      color: vibe.gold.clone(),
-      metalness: 0.15,
-      roughness: 0.2,
-      emissive: vibe.amber.clone(),
-      emissiveIntensity: 0.28,
-    });
-    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-    ring.rotation.x = Math.PI / 2.6;
-    ring.rotation.y = Math.PI / 8;
-    group.add(ring);
-
-    const shellMaterial = new THREE.MeshBasicMaterial({
-      color: vibe.purple.clone(),
-      wireframe: true,
-      transparent: true,
-      opacity: 0.22,
-    });
-    const shell = new THREE.Mesh(shellGeometry, shellMaterial);
-    group.add(shell);
-
+  function createSatellites(material) {
     const satellites = new THREE.Group();
-    const satelliteMaterial = new THREE.MeshStandardMaterial({
-      color: vibe.cyan.clone(),
-      metalness: 0.2,
-      roughness: 0.2,
-      emissive: vibe.purple.clone(),
-      emissiveIntensity: 0.22,
-    });
     for (let i = 0; i < 9; i += 1) {
-      const sphere = new THREE.Mesh(satelliteGeometry, satelliteMaterial);
+      const sphere = new THREE.Mesh(geometries.satellite, material);
       const angle = (i / 9) * Math.PI * 2;
       const radius = 3 + (i % 3) * 0.35;
       sphere.position.set(
@@ -301,7 +504,22 @@ if (!navigator.gpu) {
       );
       satellites.add(sphere);
     }
-    group.add(satellites);
+    return satellites;
+  }
+
+  function createCluster() {
+    const group = new THREE.Group();
+    scene.add(group);
+
+    const materials = createMaterials();
+    const knot = new THREE.Mesh(geometries.knot, materials.knot);
+    const ring = new THREE.Mesh(geometries.ring, materials.ring);
+    ring.rotation.x = Math.PI / 2.6;
+    ring.rotation.y = Math.PI / 8;
+    const shell = new THREE.Mesh(geometries.shell, materials.shell);
+    const satellites = createSatellites(materials.satellites);
+
+    group.add(knot, ring, shell, satellites);
 
     const basePosition = new THREE.Vector3(
       THREE.MathUtils.randFloatSpread(4),
@@ -316,12 +534,7 @@ if (!navigator.gpu) {
       ring,
       shell,
       satellites,
-      materials: {
-        knot: knotMaterial,
-        ring: ringMaterial,
-        shell: shellMaterial,
-        satellites: satelliteMaterial,
-      },
+      materials,
       basePosition,
       velocity: new THREE.Vector3(),
       drift: new THREE.Vector2(
@@ -343,18 +556,17 @@ if (!navigator.gpu) {
   rebuildClusters(settings.clusterCount);
 
   window.addEventListener("pointerdown", () => {
-    raycaster.setFromCamera(mouse, camera);
-    raycaster.ray.intersectPlane(cursorPlane, cursorPoint);
+    updateCursorPoint();
     clusters.forEach((cluster) => {
       const toCluster = cluster.group.position.clone().sub(cursorPoint);
       const distance = toCluster.length();
-      if (distance < interaction.blastRadius) {
+      if (distance < INTERACTION.blastRadius) {
         const strength =
           THREE.MathUtils.smootherstep(
-            interaction.blastRadius - distance,
+            INTERACTION.blastRadius - distance,
             0,
-            interaction.blastRadius
-          ) * interaction.blastStrength;
+            INTERACTION.blastRadius
+          ) * INTERACTION.blastStrength;
         cluster.velocity.add(toCluster.normalize().multiplyScalar(strength));
       }
     });
@@ -369,121 +581,10 @@ if (!navigator.gpu) {
   app.appendChild(renderer.domElement);
 
   const clock = new THREE.Clock();
-  const paletteSets = {
-    psychedelic: {
-      knot: [
-        new THREE.Color("#7fe3ff"),
-        new THREE.Color("#5bffc9"),
-        new THREE.Color("#ff8fe0"),
-      ],
-      ring: [
-        new THREE.Color("#fff0a6"),
-        new THREE.Color("#9be8ff"),
-        new THREE.Color("#d98bff"),
-      ],
-      shell: [
-        new THREE.Color("#d98bff"),
-        new THREE.Color("#5bffc9"),
-        new THREE.Color("#7fe3ff"),
-      ],
-      satellites: [
-        new THREE.Color("#7fe3ff"),
-        new THREE.Color("#b0f1ff"),
-        new THREE.Color("#ff8fe0"),
-      ],
-    },
-    pastel: {
-      knot: [
-        new THREE.Color("#ffd6e8"),
-        new THREE.Color("#c8f2ff"),
-        new THREE.Color("#d9d3ff"),
-      ],
-      ring: [
-        new THREE.Color("#fff1c9"),
-        new THREE.Color("#d5f3e2"),
-        new THREE.Color("#ffe0f0"),
-      ],
-      shell: [
-        new THREE.Color("#e6d9ff"),
-        new THREE.Color("#cfe9ff"),
-        new THREE.Color("#ffdce6"),
-      ],
-      satellites: [
-        new THREE.Color("#d4f0ff"),
-        new THREE.Color("#e6dcff"),
-        new THREE.Color("#ffe7cf"),
-      ],
-    },
-    primary: {
-      knot: [
-        new THREE.Color("#ff3b30"),
-        new THREE.Color("#34c759"),
-        new THREE.Color("#007aff"),
-      ],
-      ring: [
-        new THREE.Color("#ff9f0a"),
-        new THREE.Color("#ffd60a"),
-        new THREE.Color("#af52de"),
-      ],
-      shell: [
-        new THREE.Color("#0a84ff"),
-        new THREE.Color("#30d158"),
-        new THREE.Color("#ff375f"),
-      ],
-      satellites: [
-        new THREE.Color("#ff453a"),
-        new THREE.Color("#64d2ff"),
-        new THREE.Color("#ffd60a"),
-      ],
-    },
-    neon: {
-      knot: [
-        new THREE.Color("#00f7ff"),
-        new THREE.Color("#39ff14"),
-        new THREE.Color("#ff4dff"),
-      ],
-      ring: [
-        new THREE.Color("#ffea00"),
-        new THREE.Color("#00e5ff"),
-        new THREE.Color("#ff0080"),
-      ],
-      shell: [
-        new THREE.Color("#8c52ff"),
-        new THREE.Color("#00ffcc"),
-        new THREE.Color("#ff4dff"),
-      ],
-      satellites: [
-        new THREE.Color("#00f7ff"),
-        new THREE.Color("#39ff14"),
-        new THREE.Color("#ffea00"),
-      ],
-    },
-    mono: {
-      knot: [
-        new THREE.Color("#f5f7ff"),
-        new THREE.Color("#c7d2ff"),
-        new THREE.Color("#8f9bff"),
-      ],
-      ring: [
-        new THREE.Color("#e9edf8"),
-        new THREE.Color("#b7c0e6"),
-        new THREE.Color("#6d75b8"),
-      ],
-      shell: [
-        new THREE.Color("#dfe3f5"),
-        new THREE.Color("#9ea6c9"),
-        new THREE.Color("#6b7396"),
-      ],
-      satellites: [
-        new THREE.Color("#eef1fb"),
-        new THREE.Color("#c0c8e9"),
-        new THREE.Color("#8892c2"),
-      ],
-    },
-  };
-  let palettes = paletteSets[settings.palette];
   const workColor = new THREE.Color();
   const workEmissive = new THREE.Color();
+  const tempPosition = new THREE.Vector3();
+  const tempToCursor = new THREE.Vector3();
 
   function mixPalette(colors, t) {
     if (t < 0.5) {
@@ -498,27 +599,26 @@ if (!navigator.gpu) {
 
   function animate() {
     const elapsed = clock.getElapsedTime();
-    palettes = paletteSets[settings.palette] || paletteSets.psychedelic;
-    raycaster.setFromCamera(mouse, camera);
-    raycaster.ray.intersectPlane(cursorPlane, cursorPoint);
+    updateCursorPoint();
+
     clusters.forEach((cluster) => {
       const { group, knot, ring, shell, satellites, materials } = cluster;
       const phaseOffset = cluster.offsets.color * Math.PI * 2;
       const colorPhase =
         (Math.sin(elapsed * settings.colorSpeed + phaseOffset) + 1) / 2;
 
-      mixPalette(palettes.knot, colorPhase);
+      mixPalette(activePalette.knot, colorPhase);
       materials.knot.color.copy(workColor);
       materials.knot.emissive.copy(workEmissive);
 
-      mixPalette(palettes.ring, (colorPhase + 0.2) % 1);
+      mixPalette(activePalette.ring, (colorPhase + 0.2) % 1);
       materials.ring.color.copy(workColor);
       materials.ring.emissive.copy(workEmissive);
 
-      mixPalette(palettes.shell, (colorPhase + 0.4) % 1);
+      mixPalette(activePalette.shell, (colorPhase + 0.4) % 1);
       materials.shell.color.copy(workColor);
 
-      mixPalette(palettes.satellites, (colorPhase + 0.6) % 1);
+      mixPalette(activePalette.satellites, (colorPhase + 0.6) % 1);
       materials.satellites.color.copy(workColor);
       materials.satellites.emissive.copy(workEmissive);
 
@@ -535,36 +635,36 @@ if (!navigator.gpu) {
       );
       group.scale.setScalar(scale);
 
-      const driftX =
-        Math.cos(elapsed * cluster.speed.x + cluster.offsets.rotation) *
-        cluster.drift.x;
-      const driftY =
-        Math.sin(elapsed * cluster.speed.y + cluster.offsets.rotation) *
-        cluster.drift.y;
-      const targetPosition = new THREE.Vector3(
-        cluster.basePosition.x + driftX,
-        cluster.basePosition.y + driftY,
+      tempPosition.set(
+        cluster.basePosition.x +
+          Math.cos(elapsed * cluster.speed.x + cluster.offsets.rotation) *
+            cluster.drift.x,
+        cluster.basePosition.y +
+          Math.sin(elapsed * cluster.speed.y + cluster.offsets.rotation) *
+            cluster.drift.y,
         cluster.basePosition.z
       );
 
-      const toCursor = targetPosition.clone().sub(cursorPoint);
-      const distance = toCursor.length();
-      if (distance < interaction.avoidRadius) {
-        const strength = THREE.MathUtils.smoothstep(
-          interaction.avoidRadius - distance,
-          0,
-          interaction.avoidRadius
-        );
-        targetPosition.add(
-          toCursor
-            .normalize()
-            .multiplyScalar(strength * interaction.avoidStrength)
-        );
+      if (settings.avoidEnabled) {
+        tempToCursor.copy(tempPosition).sub(cursorPoint);
+        const distance = tempToCursor.length();
+        if (distance < INTERACTION.avoidRadius) {
+          const strength = THREE.MathUtils.smoothstep(
+            INTERACTION.avoidRadius - distance,
+            0,
+            INTERACTION.avoidRadius
+          );
+          tempPosition.add(
+            tempToCursor
+              .normalize()
+              .multiplyScalar(strength * INTERACTION.avoidStrength)
+          );
+        }
       }
 
-      cluster.velocity.multiplyScalar(interaction.blastDamping);
-      targetPosition.add(cluster.velocity);
-      group.position.copy(targetPosition);
+      cluster.velocity.multiplyScalar(INTERACTION.blastDamping);
+      tempPosition.add(cluster.velocity);
+      group.position.copy(tempPosition);
 
       group.rotation.y =
         elapsed * 0.25 * settings.rotationSpeed + cluster.offsets.rotation;
@@ -585,6 +685,7 @@ if (!navigator.gpu) {
           Math.sin(elapsed * 1.1 * settings.rotationSpeed + offset) * 0.8;
       });
     });
+
     renderer.render(scene, camera);
     requestAnimationFrame(animate);
   }
