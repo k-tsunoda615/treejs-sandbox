@@ -49,10 +49,17 @@ canvas {
   height: 100%;
 }
 
-.control-panel {
+.control-panel-stack {
   position: fixed;
   top: 20px;
   right: 20px;
+  display: grid;
+  gap: 12px;
+  z-index: 10;
+}
+
+.control-panel {
+  position: relative;
   display: grid;
   gap: 10px;
   padding: 14px 16px;
@@ -123,4 +130,15 @@ canvas {
 
 .control-panel__button:hover {
   border-color: rgba(130, 170, 255, 0.65);
+}
+
+.control-panel__error {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 120, 120, 0.4);
+  background: rgba(60, 10, 20, 0.6);
+  color: #ffd6dd;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: none;
 }

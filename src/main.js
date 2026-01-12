@@ -125,6 +125,7 @@ const SETTINGS_DEFAULTS = {
   scaleSpeed: 0.3,
   rotationSpeed: 2,
   avoidEnabled: true,
+  useWebGPU: true,
   palette: "primary",
 };
 
@@ -136,11 +137,7 @@ const INTERACTION = {
   blastDamping: 0.92,
 };
 
-if (!navigator.gpu) {
-  app.innerHTML = "WebGPU is not supported in this browser.";
-} else {
-  initScene();
-}
+initScene();
 
 function initScene() {
   const scene = new THREE.Scene();
@@ -195,13 +192,24 @@ function initScene() {
   };
 
   const settings = { ...SETTINGS_DEFAULTS };
+  const gpuAvailable = Boolean(navigator.gpu);
+  settings.useWebGPU = gpuAvailable && settings.useWebGPU;
   const clusters = [];
   let activePalette = PALETTE_SETS[settings.palette];
+
+  const panelStack = document.createElement("div");
+  panelStack.className = "control-panel-stack";
+  document.body.appendChild(panelStack);
+
+  const gpuPanel = document.createElement("div");
+  gpuPanel.className = "control-panel";
+  gpuPanel.innerHTML = `<div class="control-panel__title">webgpu</div>`;
+  panelStack.appendChild(gpuPanel);
 
   const ui = document.createElement("div");
   ui.className = "control-panel";
   ui.innerHTML = `<div class="control-panel__title">controls</div>`;
-  document.body.appendChild(ui);
+  panelStack.appendChild(ui);
 
   const controlMap = {};
 
@@ -270,7 +278,7 @@ function initScene() {
     return select;
   }
 
-  function addToggle({ key, label }) {
+  function addToggle({ key, label, container = ui }) {
     const row = document.createElement("div");
     row.className = "control-panel__row";
     row.innerHTML = `
@@ -284,7 +292,7 @@ function initScene() {
     input.className = "control-panel__toggle";
     input.checked = Boolean(settings[key]);
     row.appendChild(input);
-    ui.appendChild(row);
+    container.appendChild(row);
     controlMap[key] = {
       input,
       value: row.querySelector(".control-panel__value"),
@@ -426,6 +434,11 @@ function initScene() {
         controlMap.avoidEnabled.value.textContent = settings.avoidEnabled ? "on" : "off";
         return;
       }
+      if (key === "useWebGPU") {
+        controlMap.useWebGPU.input.checked = settings.useWebGPU;
+        controlMap.useWebGPU.value.textContent = settings.useWebGPU ? "on" : "off";
+        return;
+      }
       syncValue(key);
     });
 
@@ -442,6 +455,34 @@ function initScene() {
       }
     }
   );
+
+  const gpuError = document.createElement("div");
+  gpuError.className = "control-panel__error";
+  gpuError.textContent = "この環境ではWebGPUを使えません。WebGLに切り替えました。";
+  gpuError.hidden = true;
+  gpuPanel.appendChild(gpuError);
+
+  const rendererToggle = addToggle({
+    key: "useWebGPU",
+    label: "enable",
+    container: gpuPanel,
+  });
+  rendererToggle.disabled = !gpuAvailable;
+  rendererToggle.addEventListener("change", async (event) => {
+    if (event.target.checked && !gpuAvailable) {
+      event.target.checked = false;
+      settings.useWebGPU = false;
+      gpuError.hidden = false;
+      return;
+    }
+    settings.useWebGPU = event.target.checked;
+    const control = controlMap.useWebGPU;
+    if (control) {
+      control.value.textContent = settings.useWebGPU ? "on" : "off";
+    }
+    gpuError.hidden = true;
+    await setRenderer(settings.useWebGPU);
+  });
 
   addSelect({
     key: "palette",
@@ -575,13 +616,35 @@ function initScene() {
     });
   });
 
-  const renderer = new WebGPURenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
-  app.appendChild(renderer.domElement);
+  let renderer = null;
+  let rendererReady = false;
+
+  async function setRenderer(useWebGPU) {
+    if (renderer) {
+      renderer.dispose();
+      renderer.domElement?.remove();
+    }
+    rendererReady = false;
+
+    if (useWebGPU && gpuAvailable) {
+      renderer = new WebGPURenderer({ antialias: true });
+    } else {
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+    }
+
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    app.appendChild(renderer.domElement);
+
+    if (renderer.init) {
+      await renderer.init();
+    }
+
+    rendererReady = true;
+  }
 
   const clock = new THREE.Clock();
   const workColor = new THREE.Color();
@@ -689,20 +752,24 @@ function initScene() {
       });
     });
 
-    renderer.render(scene, camera);
+    if (rendererReady) {
+      renderer.render(scene, camera);
+    }
     requestAnimationFrame(animate);
   }
 
   function onResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (renderer) {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
   }
 
   window.addEventListener("resize", onResize);
 
   async function start() {
-    await renderer.init();
+    await setRenderer(settings.useWebGPU);
     animate();
   }
 
