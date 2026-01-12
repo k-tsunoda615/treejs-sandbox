@@ -53,12 +53,13 @@ if (!navigator.gpu) {
 
   const clusters = [];
   const settings = {
-    clusterCount: 4,
-    colorSpeed: 0.35,
-    scaleMin: 0.3,
-    scaleMax: 1.2,
-    scaleSpeed: 0.3,
+    clusterCount: 100,
+    colorSpeed: 0.5,
+    scaleMin: 0.1,
+    scaleMax: 0.5,
+    scaleSpeed: 0.5,
     rotationSpeed: 1,
+    palette: "psychedelic",
   };
 
   const interaction = {
@@ -89,7 +90,10 @@ if (!navigator.gpu) {
     row.innerHTML = `
       <div class="control-panel__label">
         <span>${label}</span>
-        <span class="control-panel__value">${formatValue(settings[key], step)}</span>
+        <span class="control-panel__value">${formatValue(
+          settings[key],
+          step
+        )}</span>
       </div>
     `;
     const input = document.createElement("input");
@@ -101,8 +105,41 @@ if (!navigator.gpu) {
     input.value = String(settings[key]);
     row.appendChild(input);
     ui.appendChild(row);
-    controlMap[key] = { input, value: row.querySelector(".control-panel__value"), step };
+    controlMap[key] = {
+      input,
+      value: row.querySelector(".control-panel__value"),
+      step,
+    };
     return input;
+  }
+
+  function addSelect({ key, label, options }) {
+    const row = document.createElement("div");
+    row.className = "control-panel__row";
+    row.innerHTML = `
+      <div class="control-panel__label">
+        <span>${label}</span>
+        <span class="control-panel__value">${settings[key]}</span>
+      </div>
+    `;
+    const select = document.createElement("select");
+    select.className = "control-panel__select";
+    options.forEach((option) => {
+      const item = document.createElement("option");
+      item.value = option.value;
+      item.textContent = option.label;
+      if (option.value === settings[key]) {
+        item.selected = true;
+      }
+      select.appendChild(item);
+    });
+    row.appendChild(select);
+    ui.appendChild(row);
+    controlMap[key] = {
+      input: select,
+      value: row.querySelector(".control-panel__value"),
+    };
+    return select;
   }
 
   function syncValue(key) {
@@ -121,48 +158,94 @@ if (!navigator.gpu) {
       clusters.push(createCluster());
     }
   }
-  
-  addSlider({ key: "clusterCount", label: "clusters", min: 1, max: 500, step: 1 }).addEventListener(
-    "input",
-    (event) => {
-      settings.clusterCount = Number(event.target.value);
-      syncValue("clusterCount");
-      rebuildClusters(settings.clusterCount);
-    }
-  );
-  addSlider({ key: "colorSpeed", label: "color speed", min: 0.05, max: 1, step: 0.05 })
-    .addEventListener("input", (event) => {
-      settings.colorSpeed = Number(event.target.value);
-      syncValue("colorSpeed");
-    });
-  addSlider({ key: "scaleMin", label: "scale min", min: 0.1, max: 1.2, step: 0.05 })
-    .addEventListener("input", (event) => {
-      settings.scaleMin = Number(event.target.value);
-      if (settings.scaleMin > settings.scaleMax) {
-        settings.scaleMax = settings.scaleMin;
-        syncValue("scaleMax");
-      }
-      syncValue("scaleMin");
-    });
-  addSlider({ key: "scaleMax", label: "scale max", min: 0.3, max: 2, step: 0.05 })
-    .addEventListener("input", (event) => {
-      settings.scaleMax = Number(event.target.value);
-      if (settings.scaleMax < settings.scaleMin) {
-        settings.scaleMin = settings.scaleMax;
-        syncValue("scaleMin");
-      }
+
+  addSlider({
+    key: "clusterCount",
+    label: "clusters",
+    min: 1,
+    max: 350,
+    step: 1,
+  }).addEventListener("input", (event) => {
+    settings.clusterCount = Number(event.target.value);
+    syncValue("clusterCount");
+    rebuildClusters(settings.clusterCount);
+  });
+  addSlider({
+    key: "colorSpeed",
+    label: "color speed",
+    min: 0.05,
+    max: 1,
+    step: 0.05,
+  }).addEventListener("input", (event) => {
+    settings.colorSpeed = Number(event.target.value);
+    syncValue("colorSpeed");
+  });
+  addSlider({
+    key: "scaleMin",
+    label: "scale min",
+    min: 0.1,
+    max: 1.2,
+    step: 0.05,
+  }).addEventListener("input", (event) => {
+    settings.scaleMin = Number(event.target.value);
+    if (settings.scaleMin > settings.scaleMax) {
+      settings.scaleMax = settings.scaleMin;
       syncValue("scaleMax");
-    });
-  addSlider({ key: "scaleSpeed", label: "scale speed", min: 0.05, max: 1, step: 0.05 })
-    .addEventListener("input", (event) => {
-      settings.scaleSpeed = Number(event.target.value);
-      syncValue("scaleSpeed");
-    });
-  addSlider({ key: "rotationSpeed", label: "rotation speed", min: 0, max: 2, step: 0.05 })
-    .addEventListener("input", (event) => {
-      settings.rotationSpeed = Number(event.target.value);
-      syncValue("rotationSpeed");
-    });
+    }
+    syncValue("scaleMin");
+  });
+  addSlider({
+    key: "scaleMax",
+    label: "scale max",
+    min: 0.3,
+    max: 2,
+    step: 0.05,
+  }).addEventListener("input", (event) => {
+    settings.scaleMax = Number(event.target.value);
+    if (settings.scaleMax < settings.scaleMin) {
+      settings.scaleMin = settings.scaleMax;
+      syncValue("scaleMin");
+    }
+    syncValue("scaleMax");
+  });
+  addSlider({
+    key: "scaleSpeed",
+    label: "scale speed",
+    min: 0.05,
+    max: 1,
+    step: 0.05,
+  }).addEventListener("input", (event) => {
+    settings.scaleSpeed = Number(event.target.value);
+    syncValue("scaleSpeed");
+  });
+  addSlider({
+    key: "rotationSpeed",
+    label: "rotation speed",
+    min: 0,
+    max: 2,
+    step: 0.05,
+  }).addEventListener("input", (event) => {
+    settings.rotationSpeed = Number(event.target.value);
+    syncValue("rotationSpeed");
+  });
+
+  addSelect({
+    key: "palette",
+    label: "palette",
+    options: [
+      { value: "psychedelic", label: "psychedelic" },
+      { value: "pastel", label: "pastel" },
+      { value: "primary", label: "primary" },
+      { value: "neon", label: "neon" },
+      { value: "mono", label: "mono" },
+    ],
+  }).addEventListener("change", (event) => {
+    settings.palette = event.target.value;
+    const control = controlMap.palette;
+    if (control) {
+      control.value.textContent = settings.palette;
+    }
+  });
 
   function createCluster() {
     const group = new THREE.Group();
@@ -286,28 +369,119 @@ if (!navigator.gpu) {
   app.appendChild(renderer.domElement);
 
   const clock = new THREE.Clock();
-  const palettes = {
-    knot: [
-      new THREE.Color("#7fe3ff"),
-      new THREE.Color("#5bffc9"),
-      new THREE.Color("#ff8fe0"),
-    ],
-    ring: [
-      new THREE.Color("#fff0a6"),
-      new THREE.Color("#9be8ff"),
-      new THREE.Color("#d98bff"),
-    ],
-    shell: [
-      new THREE.Color("#d98bff"),
-      new THREE.Color("#5bffc9"),
-      new THREE.Color("#7fe3ff"),
-    ],
-    satellites: [
-      new THREE.Color("#7fe3ff"),
-      new THREE.Color("#b0f1ff"),
-      new THREE.Color("#ff8fe0"),
-    ],
+  const paletteSets = {
+    psychedelic: {
+      knot: [
+        new THREE.Color("#7fe3ff"),
+        new THREE.Color("#5bffc9"),
+        new THREE.Color("#ff8fe0"),
+      ],
+      ring: [
+        new THREE.Color("#fff0a6"),
+        new THREE.Color("#9be8ff"),
+        new THREE.Color("#d98bff"),
+      ],
+      shell: [
+        new THREE.Color("#d98bff"),
+        new THREE.Color("#5bffc9"),
+        new THREE.Color("#7fe3ff"),
+      ],
+      satellites: [
+        new THREE.Color("#7fe3ff"),
+        new THREE.Color("#b0f1ff"),
+        new THREE.Color("#ff8fe0"),
+      ],
+    },
+    pastel: {
+      knot: [
+        new THREE.Color("#ffd6e8"),
+        new THREE.Color("#c8f2ff"),
+        new THREE.Color("#d9d3ff"),
+      ],
+      ring: [
+        new THREE.Color("#fff1c9"),
+        new THREE.Color("#d5f3e2"),
+        new THREE.Color("#ffe0f0"),
+      ],
+      shell: [
+        new THREE.Color("#e6d9ff"),
+        new THREE.Color("#cfe9ff"),
+        new THREE.Color("#ffdce6"),
+      ],
+      satellites: [
+        new THREE.Color("#d4f0ff"),
+        new THREE.Color("#e6dcff"),
+        new THREE.Color("#ffe7cf"),
+      ],
+    },
+    primary: {
+      knot: [
+        new THREE.Color("#ff3b30"),
+        new THREE.Color("#34c759"),
+        new THREE.Color("#007aff"),
+      ],
+      ring: [
+        new THREE.Color("#ff9f0a"),
+        new THREE.Color("#ffd60a"),
+        new THREE.Color("#af52de"),
+      ],
+      shell: [
+        new THREE.Color("#0a84ff"),
+        new THREE.Color("#30d158"),
+        new THREE.Color("#ff375f"),
+      ],
+      satellites: [
+        new THREE.Color("#ff453a"),
+        new THREE.Color("#64d2ff"),
+        new THREE.Color("#ffd60a"),
+      ],
+    },
+    neon: {
+      knot: [
+        new THREE.Color("#00f7ff"),
+        new THREE.Color("#39ff14"),
+        new THREE.Color("#ff4dff"),
+      ],
+      ring: [
+        new THREE.Color("#ffea00"),
+        new THREE.Color("#00e5ff"),
+        new THREE.Color("#ff0080"),
+      ],
+      shell: [
+        new THREE.Color("#8c52ff"),
+        new THREE.Color("#00ffcc"),
+        new THREE.Color("#ff4dff"),
+      ],
+      satellites: [
+        new THREE.Color("#00f7ff"),
+        new THREE.Color("#39ff14"),
+        new THREE.Color("#ffea00"),
+      ],
+    },
+    mono: {
+      knot: [
+        new THREE.Color("#f5f7ff"),
+        new THREE.Color("#c7d2ff"),
+        new THREE.Color("#8f9bff"),
+      ],
+      ring: [
+        new THREE.Color("#e9edf8"),
+        new THREE.Color("#b7c0e6"),
+        new THREE.Color("#6d75b8"),
+      ],
+      shell: [
+        new THREE.Color("#dfe3f5"),
+        new THREE.Color("#9ea6c9"),
+        new THREE.Color("#6b7396"),
+      ],
+      satellites: [
+        new THREE.Color("#eef1fb"),
+        new THREE.Color("#c0c8e9"),
+        new THREE.Color("#8892c2"),
+      ],
+    },
   };
+  let palettes = paletteSets[settings.palette];
   const workColor = new THREE.Color();
   const workEmissive = new THREE.Color();
 
@@ -324,6 +498,7 @@ if (!navigator.gpu) {
 
   function animate() {
     const elapsed = clock.getElapsedTime();
+    palettes = paletteSets[settings.palette] || paletteSets.psychedelic;
     raycaster.setFromCamera(mouse, camera);
     raycaster.ray.intersectPlane(cursorPlane, cursorPoint);
     clusters.forEach((cluster) => {
@@ -348,10 +523,16 @@ if (!navigator.gpu) {
       materials.satellites.emissive.copy(workEmissive);
 
       const scalePhase =
-        (Math.sin(elapsed * settings.scaleSpeed + cluster.offsets.scale * Math.PI * 2) +
+        (Math.sin(
+          elapsed * settings.scaleSpeed + cluster.offsets.scale * Math.PI * 2
+        ) +
           1) /
         2;
-      const scale = THREE.MathUtils.lerp(settings.scaleMin, settings.scaleMax, scalePhase);
+      const scale = THREE.MathUtils.lerp(
+        settings.scaleMin,
+        settings.scaleMax,
+        scalePhase
+      );
       group.scale.setScalar(scale);
 
       const driftX =
@@ -375,7 +556,9 @@ if (!navigator.gpu) {
           interaction.avoidRadius
         );
         targetPosition.add(
-          toCursor.normalize().multiplyScalar(strength * interaction.avoidStrength)
+          toCursor
+            .normalize()
+            .multiplyScalar(strength * interaction.avoidStrength)
         );
       }
 
@@ -383,10 +566,13 @@ if (!navigator.gpu) {
       targetPosition.add(cluster.velocity);
       group.position.copy(targetPosition);
 
-      group.rotation.y = elapsed * 0.25 * settings.rotationSpeed + cluster.offsets.rotation;
-      knot.rotation.x = elapsed * 0.5 * settings.rotationSpeed + cluster.offsets.rotation;
+      group.rotation.y =
+        elapsed * 0.25 * settings.rotationSpeed + cluster.offsets.rotation;
+      knot.rotation.x =
+        elapsed * 0.5 * settings.rotationSpeed + cluster.offsets.rotation;
       knot.rotation.z = elapsed * 0.35 * settings.rotationSpeed;
-      ring.rotation.z = elapsed * 0.6 * settings.rotationSpeed + cluster.offsets.rotation;
+      ring.rotation.z =
+        elapsed * 0.6 * settings.rotationSpeed + cluster.offsets.rotation;
       shell.rotation.y = -elapsed * 0.15 * settings.rotationSpeed;
       satellites.children.forEach((mesh, index) => {
         const offset = index * 0.35 + cluster.offsets.rotation;

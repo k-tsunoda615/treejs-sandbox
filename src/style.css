@@ -89,3 +89,15 @@ canvas {
   width: 180px;
   accent-color: #41d1ff;
 }
+
+.control-panel__select {
+  width: 180px;
+  padding: 6px 8px;
+  background: rgba(15, 20, 32, 0.8);
+  color: #e8f4ff;
+  border: 1px solid rgba(130, 170, 255, 0.25);
+  border-radius: 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
