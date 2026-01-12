@@ -52,7 +52,117 @@ if (!navigator.gpu) {
   const satelliteGeometry = new THREE.SphereGeometry(0.12, 16, 16);
 
   const clusters = [];
-  const clusterCount = 300;
+  const settings = {
+    clusterCount: 4,
+    colorSpeed: 0.35,
+    scaleMin: 0.3,
+    scaleMax: 1.2,
+    scaleSpeed: 0.3,
+    rotationSpeed: 1,
+  };
+
+  const interaction = {
+    avoidRadius: 2.5,
+    avoidStrength: 2,
+    blastRadius: 2.2,
+    blastStrength: 1.6,
+    blastDamping: 0.92,
+  };
+
+  const ui = document.createElement("div");
+  ui.className = "control-panel";
+  ui.innerHTML = `<div class="control-panel__title">controls</div>`;
+  document.body.appendChild(ui);
+
+  const controlMap = {};
+
+  function formatValue(value, step) {
+    if (step < 1) {
+      return value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+    }
+    return String(Math.round(value));
+  }
+
+  function addSlider({ key, label, min, max, step }) {
+    const row = document.createElement("div");
+    row.className = "control-panel__row";
+    row.innerHTML = `
+      <div class="control-panel__label">
+        <span>${label}</span>
+        <span class="control-panel__value">${formatValue(settings[key], step)}</span>
+      </div>
+    `;
+    const input = document.createElement("input");
+    input.className = "control-panel__slider";
+    input.type = "range";
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.value = String(settings[key]);
+    row.appendChild(input);
+    ui.appendChild(row);
+    controlMap[key] = { input, value: row.querySelector(".control-panel__value"), step };
+    return input;
+  }
+
+  function syncValue(key) {
+    const control = controlMap[key];
+    if (!control) return;
+    control.input.value = String(settings[key]);
+    control.value.textContent = formatValue(settings[key], control.step);
+  }
+
+  function rebuildClusters(count) {
+    clusters.forEach((cluster) => {
+      scene.remove(cluster.group);
+    });
+    clusters.length = 0;
+    for (let i = 0; i < count; i += 1) {
+      clusters.push(createCluster());
+    }
+  }
+  
+  addSlider({ key: "clusterCount", label: "clusters", min: 1, max: 500, step: 1 }).addEventListener(
+    "input",
+    (event) => {
+      settings.clusterCount = Number(event.target.value);
+      syncValue("clusterCount");
+      rebuildClusters(settings.clusterCount);
+    }
+  );
+  addSlider({ key: "colorSpeed", label: "color speed", min: 0.05, max: 1, step: 0.05 })
+    .addEventListener("input", (event) => {
+      settings.colorSpeed = Number(event.target.value);
+      syncValue("colorSpeed");
+    });
+  addSlider({ key: "scaleMin", label: "scale min", min: 0.1, max: 1.2, step: 0.05 })
+    .addEventListener("input", (event) => {
+      settings.scaleMin = Number(event.target.value);
+      if (settings.scaleMin > settings.scaleMax) {
+        settings.scaleMax = settings.scaleMin;
+        syncValue("scaleMax");
+      }
+      syncValue("scaleMin");
+    });
+  addSlider({ key: "scaleMax", label: "scale max", min: 0.3, max: 2, step: 0.05 })
+    .addEventListener("input", (event) => {
+      settings.scaleMax = Number(event.target.value);
+      if (settings.scaleMax < settings.scaleMin) {
+        settings.scaleMin = settings.scaleMax;
+        syncValue("scaleMin");
+      }
+      syncValue("scaleMax");
+    });
+  addSlider({ key: "scaleSpeed", label: "scale speed", min: 0.05, max: 1, step: 0.05 })
+    .addEventListener("input", (event) => {
+      settings.scaleSpeed = Number(event.target.value);
+      syncValue("scaleSpeed");
+    });
+  addSlider({ key: "rotationSpeed", label: "rotation speed", min: 0, max: 2, step: 0.05 })
+    .addEventListener("input", (event) => {
+      settings.rotationSpeed = Number(event.target.value);
+      syncValue("rotationSpeed");
+    });
 
   function createCluster() {
     const group = new THREE.Group();
@@ -130,6 +240,7 @@ if (!navigator.gpu) {
         satellites: satelliteMaterial,
       },
       basePosition,
+      velocity: new THREE.Vector3(),
       drift: new THREE.Vector2(
         THREE.MathUtils.randFloat(0.3, 0.8),
         THREE.MathUtils.randFloat(0.2, 0.6)
@@ -146,9 +257,25 @@ if (!navigator.gpu) {
     };
   }
 
-  for (let i = 0; i < clusterCount; i += 1) {
-    clusters.push(createCluster());
-  }
+  rebuildClusters(settings.clusterCount);
+
+  window.addEventListener("pointerdown", () => {
+    raycaster.setFromCamera(mouse, camera);
+    raycaster.ray.intersectPlane(cursorPlane, cursorPoint);
+    clusters.forEach((cluster) => {
+      const toCluster = cluster.group.position.clone().sub(cursorPoint);
+      const distance = toCluster.length();
+      if (distance < interaction.blastRadius) {
+        const strength =
+          THREE.MathUtils.smootherstep(
+            interaction.blastRadius - distance,
+            0,
+            interaction.blastRadius
+          ) * interaction.blastStrength;
+        cluster.velocity.add(toCluster.normalize().multiplyScalar(strength));
+      }
+    });
+  });
 
   const renderer = new WebGPURenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -202,7 +329,8 @@ if (!navigator.gpu) {
     clusters.forEach((cluster) => {
       const { group, knot, ring, shell, satellites, materials } = cluster;
       const phaseOffset = cluster.offsets.color * Math.PI * 2;
-      const colorPhase = (Math.sin(elapsed * 0.35 + phaseOffset) + 1) / 2;
+      const colorPhase =
+        (Math.sin(elapsed * settings.colorSpeed + phaseOffset) + 1) / 2;
 
       mixPalette(palettes.knot, colorPhase);
       materials.knot.color.copy(workColor);
@@ -220,8 +348,10 @@ if (!navigator.gpu) {
       materials.satellites.emissive.copy(workEmissive);
 
       const scalePhase =
-        (Math.sin(elapsed * 0.3 + cluster.offsets.scale * Math.PI * 2) + 1) / 2;
-      const scale = THREE.MathUtils.lerp(0.3, 1.2, scalePhase);
+        (Math.sin(elapsed * settings.scaleSpeed + cluster.offsets.scale * Math.PI * 2) +
+          1) /
+        2;
+      const scale = THREE.MathUtils.lerp(settings.scaleMin, settings.scaleMax, scalePhase);
       group.scale.setScalar(scale);
 
       const driftX =
@@ -230,35 +360,43 @@ if (!navigator.gpu) {
       const driftY =
         Math.sin(elapsed * cluster.speed.y + cluster.offsets.rotation) *
         cluster.drift.y;
-      group.position.set(
+      const targetPosition = new THREE.Vector3(
         cluster.basePosition.x + driftX,
         cluster.basePosition.y + driftY,
         cluster.basePosition.z
       );
 
-      const avoidRadius = 2.5;
-      const toCursor = group.position.clone().sub(cursorPoint);
+      const toCursor = targetPosition.clone().sub(cursorPoint);
       const distance = toCursor.length();
-      if (distance < avoidRadius) {
+      if (distance < interaction.avoidRadius) {
         const strength = THREE.MathUtils.smoothstep(
-          avoidRadius - distance,
+          interaction.avoidRadius - distance,
           0,
-          avoidRadius
+          interaction.avoidRadius
         );
-        group.position.add(toCursor.normalize().multiplyScalar(strength * 2));
+        targetPosition.add(
+          toCursor.normalize().multiplyScalar(strength * interaction.avoidStrength)
+        );
       }
 
-      group.rotation.y = elapsed * 0.25 + cluster.offsets.rotation;
-      knot.rotation.x = elapsed * 0.5 + cluster.offsets.rotation;
-      knot.rotation.z = elapsed * 0.35;
-      ring.rotation.z = elapsed * 0.6 + cluster.offsets.rotation;
-      shell.rotation.y = -elapsed * 0.15;
+      cluster.velocity.multiplyScalar(interaction.blastDamping);
+      targetPosition.add(cluster.velocity);
+      group.position.copy(targetPosition);
+
+      group.rotation.y = elapsed * 0.25 * settings.rotationSpeed + cluster.offsets.rotation;
+      knot.rotation.x = elapsed * 0.5 * settings.rotationSpeed + cluster.offsets.rotation;
+      knot.rotation.z = elapsed * 0.35 * settings.rotationSpeed;
+      ring.rotation.z = elapsed * 0.6 * settings.rotationSpeed + cluster.offsets.rotation;
+      shell.rotation.y = -elapsed * 0.15 * settings.rotationSpeed;
       satellites.children.forEach((mesh, index) => {
         const offset = index * 0.35 + cluster.offsets.rotation;
         const radius = 3 + (index % 3) * 0.35;
-        mesh.position.x = Math.cos(elapsed * 0.6 + offset) * radius;
-        mesh.position.z = Math.sin(elapsed * 0.6 + offset) * radius;
-        mesh.position.y = Math.sin(elapsed * 1.1 + offset) * 0.8;
+        mesh.position.x =
+          Math.cos(elapsed * 0.6 * settings.rotationSpeed + offset) * radius;
+        mesh.position.z =
+          Math.sin(elapsed * 0.6 * settings.rotationSpeed + offset) * radius;
+        mesh.position.y =
+          Math.sin(elapsed * 1.1 * settings.rotationSpeed + offset) * 0.8;
       });
     });
     renderer.render(scene, camera);
