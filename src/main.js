@@ -292,7 +292,9 @@ function initScene() {
     row.innerHTML = `
       <div class="control-panel__label">
         <span>${label}</span>
-        <span class="control-panel__value">${settings[key] ? "on" : "off"}</span>
+        <span class="control-panel__value">${
+          settings[key] ? "on" : "off"
+        }</span>
       </div>
     `;
     const input = document.createElement("input");
@@ -428,7 +430,8 @@ function initScene() {
     settings.avoidEnabled = Math.random() > 0.4;
 
     const paletteKeys = Object.keys(PALETTE_SETS);
-    settings.palette = paletteKeys[Math.floor(Math.random() * paletteKeys.length)];
+    settings.palette =
+      paletteKeys[Math.floor(Math.random() * paletteKeys.length)];
     activePalette = PALETTE_SETS[settings.palette] || PALETTE_SETS.psychedelic;
 
     Object.keys(controlMap).forEach((key) => {
@@ -439,7 +442,9 @@ function initScene() {
       }
       if (key === "avoidEnabled") {
         controlMap.avoidEnabled.input.checked = settings.avoidEnabled;
-        controlMap.avoidEnabled.value.textContent = settings.avoidEnabled ? "on" : "off";
+        controlMap.avoidEnabled.value.textContent = settings.avoidEnabled
+          ? "on"
+          : "off";
         return;
       }
       if (key === "useWebGPU") {
@@ -466,29 +471,22 @@ function initScene() {
     }
   );
 
-  const gpuError = document.createElement("div");
-  gpuError.className = "control-panel__error";
-  gpuError.textContent =
-    "この環境ではWebGPUを使えません。チェックを外してWebGLに切り替えてください。";
-  gpuError.hidden = true;
-  gpuPanel.appendChild(gpuError);
-
   const rendererToggle = addToggle({
     key: "useWebGPU",
     label: "",
     container: gpuPanel,
   });
   if (controlMap.useWebGPU) {
-    controlMap.useWebGPU.value.textContent = settings.useWebGPU ? "webgpu" : "webgl";
+    controlMap.useWebGPU.value.textContent = settings.useWebGPU
+      ? "webgpu"
+      : "webgl";
   }
-  gpuError.hidden = !(settings.useWebGPU && !gpuAvailable);
   rendererToggle.addEventListener("change", async (event) => {
     settings.useWebGPU = event.target.checked;
     const control = controlMap.useWebGPU;
     if (control) {
       control.value.textContent = settings.useWebGPU ? "webgpu" : "webgl";
     }
-    gpuError.hidden = !(settings.useWebGPU && !gpuAvailable);
     await setRenderer(settings.useWebGPU);
   });
 
@@ -635,7 +633,8 @@ function initScene() {
     rendererReady = false;
 
     if (useWebGPU && !gpuAvailable) {
-      app.textContent = "この環境ではWebGPUを使えません。";
+      app.textContent =
+        "この環境ではWebGPUを使えません。SETTINGSからRENDERERをOFFにしてWebGL版に切り替えてください。";
       return;
     }
 
